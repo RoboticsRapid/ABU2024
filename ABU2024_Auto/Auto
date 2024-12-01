@@ -1,1 +1,978 @@
+#include <ESP32Encoder.h>
+#include "Arduino.h"
+#include "HUSKYLENS.h"
+#include "SoftwareSerial.h"
+HUSKYLENS huskylens;
+SoftwareSerial mySerial(10, 11);
+TaskHandle_t Task0;
+ESP32Encoder encoder_A;
+ESP32Encoder encoder_B;
+ESP32Encoder encoder_C;
+
+#define IN1_A 40
+#define IN2_A 39
+#define IN1_B 41
+#define IN2_B 42
+#define IN1_C 18
+#define IN2_C 45
+/*-----------Drive Feed ---------*/
+
+#define IN1_D 0
+#define IN2_D 1
+#define IN1_E 2
+#define LM1 13
+#define LM2 14
+#define LM3 15
+#define LM4 16
+#define LM5 17
+#define LM6 38
+#define SW1 21
+#define SW2 26
+#define Sensor1 37
+#define Sensor2 36
+#define Sensor3 19
+#define Sensor4 34
+#define Sensor5 33
+#define Photo 4
+
+//------------------Set variable PID -----------------
+unsigned long time_1;
+unsigned long time_2;
+int A_Speed1 = 0;
+int A_Speed2 = 0;
+int B_Speed1 = 0;
+int B_Speed2 = 0;
+int C_Speed1 = 0;
+int C_Speed2 = 0;
+int D_Speed1 = 0;
+int D_Speed2 = 0;
+int E_Speed = 0;
+int ID_C = 0;
+int H_C = 0;
+int W_C = 0;
+int State = 0;
+int State2 = 0;
+int Ball_Status = 0;
+int Sequent_Search = 0;
+int count = 0;
+int Ball_Loop[] = { 0, 1, 2, 3, 2, 1 };  //เลือกตำแหน่งบอล
+int white = 5000;                        //ตรวจสีขาว
+void setup() {
+  Serial.begin(115200);
+  mySerial.begin(9600);
+  while (!huskylens.begin(mySerial)) {
+    Serial.println(F("Begin failed!"));
+    Serial.println(F("1.Please recheck the \"Protocol Type\" in HUSKYLENS (General Settings>>Protocol Type>>Serial 9600)"));
+    Serial.println(F("2.Please recheck the connection."));
+    delay(100);
+  }
+  ESP32Encoder::useInternalWeakPullResistors = puType::up;
+  encoder_A.attachHalfQuad(8, 7);
+  encoder_B.attachHalfQuad(9, 12);
+  encoder_C.attachHalfQuad(6, 5);
+  xTaskCreatePinnedToCore(Ball, "Task0", 1000, (void*)State2, 0, &Task0, 1);
+  pinMode(IN1_A, OUTPUT);
+  pinMode(IN2_A, OUTPUT);
+  pinMode(IN1_B, OUTPUT);
+  pinMode(IN2_B, OUTPUT);
+  pinMode(IN1_C, OUTPUT);
+  pinMode(IN2_C, OUTPUT);
+  pinMode(Photo, INPUT_PULLUP);
+  pinMode(0, OUTPUT);
+  pinMode(1, OUTPUT);
+  pinMode(2, OUTPUT);
+  encoder_A.clearCount();
+  encoder_B.clearCount();
+  encoder_C.clearCount();
+  pinMode(LM1, INPUT_PULLUP);
+  pinMode(LM2, INPUT_PULLUP);
+  pinMode(LM3, INPUT_PULLUP);
+  pinMode(LM4, INPUT_PULLUP);
+  pinMode(LM5, INPUT_PULLUP);
+  pinMode(LM6, INPUT_PULLUP);
+  pinMode(SW1, INPUT_PULLUP);
+  pinMode(SW2, INPUT_PULLUP);
+  pinMode(Photo, INPUT_PULLUP);
+  pinMode(Sensor1, INPUT);
+  pinMode(Sensor2, INPUT);
+  pinMode(Sensor3, INPUT);
+  pinMode(Sensor4, INPUT);
+  pinMode(Sensor5, INPUT);
+  Motor_Move(100, 0, 100, 0, 0, 0);
+  delay(500);
+  Motor_Move(0, 0, 0, 0, 0, 0);
+  delay(500);
+}
+long ENM1 = 0;
+long ENM2 = 0;
+void loop() {
+  ENM1 = encoder_A.getCount() / 2;
+  ENM2 = encoder_B.getCount() / 2;
+  switch (State) {
+    case 0:
+      if (digitalRead(SW1) == 0) {
+        State = 71;
+        time_1 = millis();
+      } else if (digitalRead(SW2) == 0) {
+        State = 72;
+        time_1 = millis();
+      }
+      if (digitalRead(LM1) == 0 || digitalRead(LM2) == 0) {
+        count = count + 1;
+        delay(500);
+      }
+      break;
+    case 71:
+      if (digitalRead(Photo) == 1) {
+        State = 1;
+        time_1 = millis();
+      }
+      break;
+    case 72:
+      if (digitalRead(Photo) == 1) {
+        State = 70;
+        time_1 = millis();
+      }
+      break;
+    case 1:
+      if (millis() - time_1 >= 500) {
+        State = 2;  // 18
+        encoder_A.clearCount();
+        encoder_B.clearCount();
+      }
+      break;
+    case 70:  //เดินตรงจุด2
+      if (millis() - time_1 >= 500) {
+        State = 3;  // 18
+        encoder_A.clearCount();
+        encoder_B.clearCount();
+      }
+      break;
+    case 2:  //เดินตรงจุด1
+      if (ENM1 > 4500) {
+        State = 3;
+      } else {
+        A_Speed1 = 255;
+        A_Speed2 = 0;
+        B_Speed1 = 255;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      }
+      break;
+    case 3:
+      Power(255, 0, 255, 0, 0, 0, 150, 0);
+      State = 4;
+      break;
+    case 4:  //แท็กลิมิต
+      if (digitalRead(LM1) == 0 && digitalRead(LM2) == 0) {
+        State = 5;
+        encoder_B.clearCount();
+      }
+      break;
+    case 5:  //แท็กเส้น เดินข้าง
+             // if (digitalRead(Sensor1) == 0 || digitalRead(Sensor2) == 0 || analogRead(Sensor3) < white ) {
+      if (analogRead(Sensor3) < white) {
+        State = 6;
+        time_1 = millis();
+        A_Speed1 = 255;
+        A_Speed2 = 255;
+        B_Speed1 = 255;
+        B_Speed2 = 255;
+        C_Speed1 = 255;
+        C_Speed2 = 255;
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 100;
+        B_Speed1 = 100;
+        B_Speed2 = 0;
+        C_Speed1 = 200;
+        C_Speed2 = 0;
+      }
+      break;
+      // case 5: //เอนโค๊ด เดินข้าง
+      //  if (ENM2 > 1000) {
+      //      State = 6;
+      //      time_1 = millis();
+      //      A_Speed1 = 255;
+      //      A_Speed2 = 255;
+      //      B_Speed1 = 255;
+      //      B_Speed2 = 255;
+      //      C_Speed1 = 255;
+      //      C_Speed2 = 255;
+      //  }   else {
+      //      A_Speed1 = 0;
+      //      A_Speed2 = 100;
+      //      B_Speed1 = 100;
+      //      B_Speed2 = 0;
+      //      C_Speed1 = 200;
+      //      C_Speed2 = 0;
+      //  }
+      //  break;
+
+    case 6:  //หยุดรถ
+      if (millis() - time_1 >= 500) {
+        State = 7;
+        encoder_A.clearCount();
+      } else {
+        A_Speed1 = 255;
+        A_Speed2 = 255;
+        B_Speed1 = 255;
+        B_Speed2 = 255;
+        C_Speed1 = 255;
+        C_Speed2 = 255;
+      }
+      break;
+    case 7:  //เดินตรงจุด3 เช็คไซโล
+      if (ENM1 >= 3000) {
+        Power(255, 0, 255, 0, 20, 0, 150, 0);
+        State = 8;
+      } else {
+        A_Speed1 = 255;
+        A_Speed2 = 0;
+        B_Speed1 = 255;
+        B_Speed2 = 0;
+        C_Speed1 = 20;
+        C_Speed2 = 0;
+      }
+      break;
+    case 8:  //เดินหน้าชน
+      if (digitalRead(LM1) == 0 && digitalRead(LM2) == 0) {
+        State = 9;
+        encoder_B.clearCount();
+      } else {
+        A_Speed1 = 150;
+        A_Speed2 = 0;
+        B_Speed1 = 150;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      }
+      break;
+    case 9:  //หมุนชน
+      if (ENM2 <= -1000) {
+        State = 10;
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 200;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      }
+      break;
+    case 10:  //ถอยหลังชน
+      if (digitalRead(LM4) == 0 && digitalRead(LM5) == 0) {
+        State = 11;
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 200;
+        B_Speed1 = 0;
+        B_Speed2 = 200;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      }
+      break;
+    case 11:  //ไถข้างชน
+      if (digitalRead(LM3) == 0) {
+        State = 12;
+        time_1 = millis();
+        encoder_B.clearCount();
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 127;
+        B_Speed1 = 127;
+        B_Speed2 = 0;
+        C_Speed1 = 255;
+        C_Speed2 = 0;
+      }
+      break;
+    case 12:
+      if (millis() - time_1 >= 500) {
+        State = 13;
+        if (count > 0) {
+          State2 = 3;
+        }
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      }
+      break;
+    case 13:  //เดินลงเก็บบอล
+      if (ENM2 > 3000) {
+        State = 14;
+        Power(255, 0, 255, 0, 0, 0, 150, 0);
+      } else {
+        A_Speed1 = 255;
+        A_Speed2 = 0;
+        B_Speed1 = 255;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      }
+      if (count > 0) {
+        Colour_Check();
+        if (ID_C == 0 && W_C < 50 && H_C < 50) {
+
+          Ball_Status = 0;
+          State2 = 3;
+        } else if (ID_C == 1 && W_C > 100 && H_C > 100) {  //บอลที่ใช่
+          State2 = 3;
+          State = 80;
+          time_1 = millis();
+          A_Speed1 = 0;
+          A_Speed2 = 0;
+          B_Speed1 = 0;
+          B_Speed2 = 0;
+          C_Speed1 = 0;
+          C_Speed2 = 0;
+          Ball_Status = 1;
+        } else if (ID_C == 3 && W_C > 100 && H_C > 100) {
+          State2 = 3;
+          State = 80;
+          time_1 = millis();
+          A_Speed1 = 0;
+          A_Speed2 = 0;
+          B_Speed1 = 0;
+          B_Speed2 = 0;
+          C_Speed1 = 0;
+          C_Speed2 = 0;
+          Ball_Status = 2;
+        } else {
+           State2 = 3;
+          Ball_Status = 0;
+        }
+      }
+      break;
+    case 80:
+      if (millis() - time_1 > 1000) {
+        if (Ball_Status == 1) {  //บอลที่ใช่
+          State2 = 1;
+          State = 19;
+          encoder_B.clearCount();
+        } else if (Ball_Status == 2) {  //บอลที่ไม่ใช่
+          State2 = 5;
+          State = 81;
+        }
+      } else {
+        State2 = 3;
+        A_Speed1 = 100;
+        A_Speed2 = 0;
+        B_Speed1 = 100;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+        encoder_B.clearCount();
+      }
+      break;
+    case 81:
+      if (ENM2 <= -300) {
+        State = 82;
+        time_1 = millis();
+        State2 = 4;
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      } else {
+        A_Speed1 = 100;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 100;
+        C_Speed1 = 100;
+        C_Speed2 = 0;
+      }
+      break;
+    case 82:
+      if (millis() - time_1 >= 2000) {
+        State = 83;
+        State2 = 5;
+        encoder_B.clearCount();
+      } else {
+        State2 = 4;
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      }
+      break;
+    case 83:
+      if (ENM2 >= 300) {
+        State = 14;
+        State2 = 3;
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 100;
+        B_Speed1 = 100;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 100;
+      }
+      break;
+    case 14:  //ชนขอบล่าง
+      if (digitalRead(LM1) == 0 && digitalRead(LM2) == 0) {
+        State = 15;
+        encoder_B.clearCount();
+      } else {
+        A_Speed1 = 150;
+        A_Speed2 = 0;
+        B_Speed1 = 150;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      }
+      if (count > 0) {
+        Colour_Check();
+        if (ID_C == 0 && W_C < 50 && H_C < 50) {
+
+          Ball_Status = 0;
+          State2 = 3;
+        } else if (ID_C == 1 && W_C > 100 && H_C > 100) {  //บอลที่ใช่
+          State2 = 3;
+          State = 80;
+          time_1 = millis();
+          A_Speed1 = 0;
+          A_Speed2 = 0;
+          B_Speed1 = 0;
+          B_Speed2 = 0;
+          C_Speed1 = 0;
+          C_Speed2 = 0;
+          Ball_Status = 1;
+        } else if (ID_C == 3 && W_C > 100 && H_C > 100) {
+          State2 = 3;
+          State = 80;
+          time_1 = millis();
+          A_Speed1 = 0;
+          A_Speed2 = 0;
+          B_Speed1 = 0;
+          B_Speed2 = 0;
+          C_Speed1 = 0;
+          C_Speed2 = 0;
+          Ball_Status = 2;
+        } else {
+           State2 = 3;
+          Ball_Status = 0;
+        }
+      }
+      break;
+
+
+    case 15:  //หมุน
+      if (ENM2 <= -1000) {
+        State = 16;
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 200;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      }
+      break;
+
+    case 16:  //ถอยหลังเช็ค
+      if (digitalRead(LM4) == 0 && digitalRead(LM5) == 0) {
+        time_1 = millis();
+        State2 = 3;
+        State = 17;
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 200;
+        B_Speed1 = 0;
+        B_Speed2 = 200;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      }
+      break;
+    case 17:  //////////////////Test keep motor
+      Colour_Check();
+      if (ID_C == 0 && W_C < 50 && H_C < 50) {
+        A_Speed1 = 100;
+        A_Speed2 = 0;
+        B_Speed1 = 100;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+        Ball_Status = 0;
+        State2 = 3;
+      } else if (ID_C == 1 && W_C > 100 && H_C > 100) {  //บอลที่ใช่
+        State2 = 3;
+        State = 30;
+        time_1 = millis();
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+        Ball_Status = 1;
+      } else if (ID_C == 3 && W_C > 100 && H_C > 100) {
+        State2 = 3;
+        State = 30;
+        time_1 = millis();
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+        Ball_Status = 2;
+      } else {
+        A_Speed1 = 100;
+        A_Speed2 = 0;
+        B_Speed1 = 100;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+        Ball_Status = 0;
+      }
+      if (digitalRead(LM1) == 0 && digitalRead(LM2) == 0) {
+        State = 50;
+        State2 = 3;
+        encoder_B.clearCount();
+      }
+      break;
+    case 30:
+      if (millis() - time_1 > 1000) {
+        if (Ball_Status == 1) {  //บอลที่ใช่
+          State2 = 1;
+          State = 18;
+          encoder_B.clearCount();
+        } else if (Ball_Status == 2) {  //บอลที่ไม่ใช่
+          State2 = 5;
+          State = 40;
+        }
+      } else {
+        State2 = 3;
+        A_Speed1 = 100;
+        A_Speed2 = 0;
+        B_Speed1 = 100;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      }
+      break;
+    case 18:                      //เช็คด้านหน้ารถ เฉียงไปเช็คข้าง
+      if (Sequent_Search == 0) {  //แถว 1
+        if (ENM2 >= 300) {
+          State = 19;
+        } else {
+          State2 = 1;
+          A_Speed1 = 150;
+          A_Speed2 = 0;
+          B_Speed1 = 150;
+          B_Speed2 = 0;
+          C_Speed1 = 0;
+          C_Speed2 = 50;
+        }
+      } else if (Sequent_Search == 1) {  //แถว 2
+        if (ENM2 <= -300) {
+          State = 19;
+        } else {
+          State2 = 1;
+          A_Speed1 = 100;
+          A_Speed2 = 0;
+          B_Speed1 = 0;
+          B_Speed2 = 100;
+          C_Speed1 = 100;
+          C_Speed2 = 0;
+        }
+      }
+      break;
+    case 19:  //เช็คข้าง
+      if (digitalRead(LM3) == 0) {
+        State = 20;
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 255;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 255;
+        C_Speed2 = 0;
+      }
+      break;
+    case 20:  //เช็คไซโล
+      if (digitalRead(LM4) == 0 && digitalRead(LM5) == 0) {
+        State = 21;
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 200;
+        B_Speed1 = 0;
+        B_Speed2 = 200;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      }
+      break;
+    case 21:  //เช็คขอบไซโล
+      if (digitalRead(LM3) == 0) {
+        State = 22;
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 127;
+        B_Speed1 = 127;
+        B_Speed2 = 0;
+        C_Speed1 = 255;
+        C_Speed2 = 0;
+      }
+      break;
+    case 22:  //ตรวจเส้นไซโล
+      if (digitalRead(Sensor2) == 0) {
+        State = 23;
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      } else {
+        A_Speed1 = 60;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 60;
+        C_Speed1 = 0;
+        C_Speed2 = 100;
+      }
+      break;  // จบใส่บอล
+    case 23:  // วนซ้ำ
+      if (digitalRead(LM4) == 0 && digitalRead(LM5) == 0) {
+        if (Ball_Loop[count] == 0) {
+          State = 24;
+          State2 = 2;
+          count = count + 1;
+        } else if (Ball_Loop[count] >= 1) {
+          State = 25;
+          time_1 = millis();
+          Ball_Loop[count] = Ball_Loop[count] - 1;
+        }
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 150;
+        B_Speed1 = 0;
+        B_Speed2 = 150;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      }
+      break;
+    case 24:  //ตรวจบอลแถว 1
+      if (State2 == 5) {
+        State = 10;
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      }
+
+      break;
+    case 25:  //ตรวจบอลแถว 2
+      if (millis() - time_1 >= 1000) {
+        State = 22;
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      } else {
+        A_Speed1 = 60;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 60;
+        C_Speed1 = 0;
+        C_Speed2 = 100;
+      }
+      break;
+    case 40:  //บอลที่ไม่ใช่
+      if (digitalRead(LM4) == 0 && digitalRead(LM5) == 0) {
+        if (Sequent_Search == 0) {
+          State = 41;
+        } else if (Sequent_Search == 1) {
+          State = 60;
+          encoder_B.clearCount();
+        }
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 200;
+        B_Speed1 = 0;
+        B_Speed2 = 200;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      }
+      break;
+    case 41:  //บอลที่ไม่ใช่แถว 1
+      if (digitalRead(LM3) == 0) {
+        State = 42;
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+        time_1 = millis();
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 100;
+        B_Speed1 = 100;
+        B_Speed2 = 0;
+        C_Speed1 = 200;
+        C_Speed2 = 0;
+      }
+      break;
+    case 42:
+      if (millis() - time_1 >= 3000) {
+        if (Sequent_Search == 0) {
+          State2 = 5;
+          State = 43;
+          encoder_B.clearCount();
+        } else if (Sequent_Search == 1) {
+          State2 = 5;
+          State = 62;
+          encoder_B.clearCount();
+        }
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+        State2 = 4;
+      }
+      break;
+    case 43:
+      if (ENM2 <= -300) {
+        State = 16;
+      } else {
+        A_Speed1 = 100;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 100;
+        C_Speed1 = 0;
+        C_Speed2 = 200;
+      }
+      break;
+    case 50:  //หมุนไปแถว2
+
+      if (ENM2 <= -300) {
+        State = 51;
+
+      } else {
+        A_Speed1 = 150;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 150;
+        C_Speed1 = 150;
+        C_Speed2 = 0;
+      }
+
+      break;
+    case 51:  //หมุนเช็คขอบ
+      if (digitalRead(LM3) == 0) {
+        State = 52;
+        encoder_B.clearCount();
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 100;
+        B_Speed1 = 100;
+        B_Speed2 = 0;
+        C_Speed1 = 200;
+        C_Speed2 = 0;
+      }
+      break;
+    case 52:  //เดินแถว2
+      if (ENM2 >= 500) {
+        State = 53;
+        encoder_B.clearCount();
+      } else {
+
+        A_Speed1 = 100;
+        A_Speed2 = 0;
+        B_Speed1 = 100;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      }
+      break;
+    case 53:  //หมุนเช็คด้านหน้า
+      if (ENM2 <= -300) {
+        State = 54;
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      } else {
+        A_Speed1 = 100;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 100;
+        C_Speed1 = 100;
+        C_Speed2 = 0;
+      }
+      break;
+    case 54:  //วนลูป
+      if (digitalRead(LM4) == 0 && digitalRead(LM5) == 0) {
+        State = 17;
+        if (Sequent_Search == 0) {
+          Sequent_Search = 1;
+        } else if (Sequent_Search == 1) {
+          Sequent_Search = 0;
+        }
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 150;
+        B_Speed1 = 0;
+        B_Speed2 = 150;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      }
+      break;
+    case 60:  //บอลที่ไม่ใช่แถว 2
+      if (ENM2 <= -300) {
+        State = 61;
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+        time_1 = millis();
+      } else {
+        A_Speed1 = 100;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 100;
+        C_Speed1 = 100;
+        C_Speed2 = 0;
+      }
+      break;
+    case 61:  // หมุมไปขวา
+      if (digitalRead(LM6) == 0) {
+        State = 42;
+        encoder_B.clearCount();
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+        time_1 = millis();
+      } else {
+        A_Speed1 = 100;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 100;
+        C_Speed1 = 0;
+        C_Speed2 = 200;
+      }
+
+      break;
+    case 62:
+      if (ENM2 >= 300) {
+        State = 63;
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 100;
+        B_Speed1 = 100;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 100;
+      }
+      break;
+    case 63:  //หมุนกลับด้านเดิม
+      if (digitalRead(LM4) == 0 && digitalRead(LM5) == 0) {
+        State = 17;
+        A_Speed1 = 0;
+        A_Speed2 = 0;
+        B_Speed1 = 0;
+        B_Speed2 = 0;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      } else {
+        A_Speed1 = 0;
+        A_Speed2 = 100;
+        B_Speed1 = 0;
+        B_Speed2 = 100;
+        C_Speed1 = 0;
+        C_Speed2 = 0;
+      }
+      break;
+    default:
+      A_Speed1 = 0;
+      A_Speed2 = 0;
+      B_Speed1 = 0;
+      B_Speed2 = 0;
+      C_Speed1 = 0;
+      C_Speed2 = 0;
+      break;
+  }
+  Motor_Move(A_Speed1, A_Speed2, B_Speed1, B_Speed2, C_Speed1, C_Speed2);
+  Serial.print(count);
+  Serial.print("\t");
+  Serial.print(State);
+  Serial.print("\t");
+  Serial.print(digitalRead(SW1));
+  Serial.println("\t");
+  //  Serial.print("\t");
+  // Serial.println(digitalRead(Sensor2));
+}
 
