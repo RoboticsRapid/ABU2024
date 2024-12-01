@@ -1,0 +1,213 @@
+void Motor_Move(int Speed_A1, int Speed_A2, int Speed_B1, int Speed_B2, int Speed_C1, int Speed_C2) {
+  analogWrite(IN1_A, Speed_A1);
+  analogWrite(IN2_A, Speed_A2);
+  analogWrite(IN1_B, Speed_B1);
+  analogWrite(IN2_B, Speed_B2);
+  analogWrite(IN1_C, Speed_C1);
+  analogWrite(IN2_C, Speed_C2);
+}
+
+void Power(int Speed_A1, int Speed_A2, int Speed_B1, int Speed_B2, int Speed_C1, int Speed_C2, int T_SPEED, int alis) {
+  int i = 0;
+  int M_Time = millis();
+  int Set_Speed_A1 = 0;
+  int Set_Speed_A2 = 0;
+  int Set_Speed_B1 = 0;
+  int Set_Speed_B2 = 0;
+  int Set_Speed_C1 = 0;
+  int Set_Speed_C2 = 0;
+  int T_Speed_A = 0;
+  int T_Speed_B = 0;
+  int T_Speed_C = 0;
+  if (Speed_A1 > 1 && Speed_A2 < 1) {
+    Set_Speed_A1 = 1;
+    Set_Speed_A2 = 0;
+    T_Speed_A = Speed_A1;
+  } else if (Speed_A1 < 1 && Speed_A2 > 1) {
+    Set_Speed_A1 = 0;
+    Set_Speed_A2 = 1;
+    T_Speed_A = Speed_A2;
+  } else {
+    Set_Speed_A1 = 0;
+    Set_Speed_A2 = 0;
+    if (alis == 0) {
+      T_Speed_A = 255;
+    } else {
+      T_Speed_A = 0;
+    }
+  }
+  if (Speed_B1 > 1 && Speed_B2 < 1) {
+    Set_Speed_B1 = 1;
+    Set_Speed_B2 = 0;
+    T_Speed_B = Speed_B1;
+  } else if (Speed_B1 < 1 && Speed_B2 > 1) {
+    Set_Speed_B1 = 0;
+    Set_Speed_B2 = 1;
+    T_Speed_B = Speed_B2;
+  } else {
+    Set_Speed_B1 = 0;
+    Set_Speed_B2 = 0;
+    if (alis == 0) {
+      T_Speed_B = 255;
+    } else {
+      T_Speed_B = 0;
+    }
+  }
+  if (Speed_C1 > 1 && Speed_C2 < 1) {
+    Set_Speed_C1 = 1;
+    Set_Speed_C2 = 0;
+    T_Speed_C = Speed_C1;
+  } else if (Speed_C1 < 1 && Speed_C2 > 1) {
+    Set_Speed_C1 = 0;
+    Set_Speed_C2 = 1;
+    T_Speed_C = Speed_C2;
+  } else {
+    Set_Speed_C1 = 0;
+    Set_Speed_C2 = 0;
+    if (alis == 0) {
+      T_Speed_C = 255;
+    } else {
+      T_Speed_C = 0;
+    }
+  }
+  while (i < 1) {
+    if (alis == 0) {
+      if (millis() - M_Time >= 100) {
+        Speed_A1 = (Speed_A1 - 10) * Set_Speed_A1;
+        Speed_A2 = (Speed_A2 - 10) * Set_Speed_A2;
+        Speed_B1 = (Speed_B1 - 10) * Set_Speed_B1;
+        Speed_B2 = (Speed_B2 - 10) * Set_Speed_B2;
+        Speed_C1 = (Speed_C1 - 10) * Set_Speed_C1;
+        Speed_C2 = (Speed_C2 - 10) * Set_Speed_C2;
+        M_Time = millis();
+        T_Speed_A = T_Speed_A - 10;
+        T_Speed_B = T_Speed_B - 10;
+        T_Speed_C = T_Speed_C - 10;
+      } else {
+        Speed_A1 = Speed_A1 * Set_Speed_A1;
+        Speed_A2 = Speed_A2 * Set_Speed_A2;
+        Speed_B1 = Speed_B1 * Set_Speed_B1;
+        Speed_B2 = Speed_B2 * Set_Speed_B2;
+        Speed_C1 = Speed_C1 * Set_Speed_C1;
+        Speed_C2 = Speed_C2 * Set_Speed_C2;
+      }
+      if (T_Speed_A <= T_SPEED || T_Speed_B <= T_SPEED || T_Speed_C <= T_SPEED) {
+        i = 1;
+      }
+    } else if (alis == 1) {
+      if (millis() - M_Time >= 100) {
+        Speed_A1 = (Speed_A1 + 10) * Set_Speed_A1;
+        Speed_A2 = (Speed_A2 + 10) * Set_Speed_A2;
+        Speed_B1 = (Speed_B1 + 10) * Set_Speed_B1;
+        Speed_B2 = (Speed_B2 + 10) * Set_Speed_B2;
+        Speed_C1 = (Speed_C1 + 10) * Set_Speed_C1;
+        Speed_C2 = (Speed_C2 + 10) * Set_Speed_C2;
+        M_Time = millis();
+        T_Speed_A = T_Speed_A + 10;
+        T_Speed_B = T_Speed_B + 10;
+        T_Speed_C = T_Speed_C + 10;
+      } else {
+        Speed_A1 = Speed_A1 * Set_Speed_A1;
+        Speed_A2 = Speed_A2 * Set_Speed_A2;
+        Speed_B1 = Speed_B1 * Set_Speed_B1;
+        Speed_B2 = Speed_B2 * Set_Speed_B2;
+        Speed_C1 = Speed_C1 * Set_Speed_C1;
+        Speed_C2 = Speed_C2 * Set_Speed_C2;
+      }
+      if (T_Speed_A >= T_SPEED || T_Speed_B >= T_SPEED || T_Speed_C >= T_SPEED) {
+        i = 1;
+      }
+    }
+    Motor_Move(Speed_A1, Speed_A2, Speed_B1, Speed_B2, Speed_C1, Speed_C2);
+  }
+  A_Speed1 = Speed_A1;
+  A_Speed2 = Speed_A2;
+  B_Speed1 = Speed_B1;
+  B_Speed2 = Speed_B2;
+  C_Speed1 = Speed_C1;
+  C_Speed2 = Speed_C2;
+}
+void Colour_Check() {
+  if (!huskylens.request()) Serial.println(F("Fail to request data from HUSKYLENS, recheck the connection!"));
+  else if (!huskylens.isLearned()) Serial.println(F("Nothing learned, press learn button on HUSKYLENS to learn one!"));
+  else if (huskylens.available()) {
+    HUSKYLENSResult result = huskylens.read();
+    // printResult(result);
+//    Serial.print(result.ID);
+    ID_C = result.ID;
+  //  Serial.print("\t");
+   // Serial.print(result.width);
+    W_C = result.width;
+   // Serial.print("\t");
+    //Serial.println(result.height);
+    H_C = result.height;
+  } else {
+    //Serial.println("NO");
+    ID_C = 0;
+    W_C = 0;
+    H_C = 0;
+  }
+}
+
+void Ball(void* parameter) {
+  pinMode(Photo, INPUT_PULLUP);
+  pinMode(IN1_D, OUTPUT);
+  pinMode(IN2_D, OUTPUT);
+  pinMode(IN1_E, OUTPUT);
+  for (;;) {
+    Serial.println(State2);
+    switch (State2) {
+      case 0:
+        break;
+      case 1:
+        if (digitalRead(Photo) == 1) {
+          E_Speed = 0;
+        } else {
+          E_Speed = 180;
+        }
+        D_Speed1 = 0;
+        D_Speed2 = 0;
+        break;
+      case 2:
+        if (digitalRead(Photo) == 1) {
+          E_Speed = 255;
+        } else {
+          E_Speed = 0;
+          State2 = 6;
+          time_2 = millis();
+        }
+        D_Speed1 = 0;
+        D_Speed2 = 0;
+        break;
+      case 3:
+        D_Speed1 = 0;
+        D_Speed2 = 1;
+        break;
+      case 4:
+        D_Speed1 = 1;
+        D_Speed2 = 0;
+        break;
+      case 5:
+        D_Speed1 = 0;
+        D_Speed2 = 0;
+        E_Speed = 0;
+        break;
+      case 6:
+        if (millis() - time_2 >= 1000) {
+          State2 = 5;
+          D_Speed1 = 0;
+          D_Speed2 = 0;
+          E_Speed = 0;
+        } else {
+          E_Speed = 255;
+        }
+        break;
+      default:
+        E_Speed = 0;
+        break;
+    }
+    digitalWrite(0, D_Speed1);
+    digitalWrite(1, D_Speed2);
+    analogWrite(2, E_Speed);
+  }
+}
